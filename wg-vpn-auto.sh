@@ -54,7 +54,7 @@ MAX_LATENCY_MS=80
 BLACKLIST=jp
 
 # Monitor interval (seconds)
-CHECK_INTERVAL=30
+CHECK_INTERVAL=600
 
 # Switching policy
 MIN_SCORE_IMPROVEMENT=15
@@ -157,7 +157,7 @@ evaluate_all_servers() {
     while IFS=: read -r NAME TYPE; do
 
         [ "$TYPE" != "wireguard" ] && continue
-        [ "$NAME" = "$ACTIVE_CONN" ] && continue
+        [ "$NAME" = "$DUMMY_CONN_ID" ] && continue
         
         log "Evaluating connection $NAME"
 
@@ -208,6 +208,7 @@ initial_select() {
 monitor_loop() {
 
     while true; do
+        sleep "$CHECK_INTERVAL"
 
         ACTIVE_CONN=$(cat /run/wg-vpn-auto.active 2>/dev/null)
         [ -z "$ACTIVE_CONN" ] && continue
@@ -224,6 +225,7 @@ monitor_loop() {
         last=0
         [ -f /run/wg-vpn-auto.lastswitch ] && last=$(cat /run/wg-vpn-auto.lastswitch)
 
+        nmcli connection down "$ACTIVE_CONN"
         evaluate_all_servers
         [ -z "$best_conn" ] && continue
 
@@ -235,13 +237,11 @@ monitor_loop() {
             log "Switching $ACTIVE_CONN -> $best_conn (improvement $improvement)"
 
             nmcli connection up "$best_conn"
-            nmcli connection down "$ACTIVE_CONN"
+            #nmcli connection down "$ACTIVE_CONN"
 
             echo "$best_conn" > /run/wg-vpn-auto.active
             echo "$now" > /run/wg-vpn-auto.lastswitch
         fi
-
-        sleep "$CHECK_INTERVAL"
     done
 }
 

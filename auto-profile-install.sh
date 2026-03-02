@@ -103,7 +103,7 @@ fi
 # remove installation
 if (( remove ))
 then
-  nmcli connection down "$profile_name_par"
+  sudo nmcli connection down "$profile_name_par"
   sudo systemctl disable wg-vpn-auto
   delete_profiles
   sudo rm -f /etc/wg-vpn-auto.conf
@@ -130,7 +130,7 @@ then
   ls -1 | while read file
   do 
       conn_name=$(echo "$file" | sed -r "s/^(.*)\.conf/\1/")
-      nmcli connection import type wireguard file $file
+      sudo nmcli connection import type wireguard file $file
       sudo nmcli connection modify "$conn_name" connection.permissions "user:root"
       sudo nmcli connection down "$conn_name"
       echo "$file file imported as $conn_name connection."
@@ -145,6 +145,7 @@ echo "DUMMY_CONN_ID=\"$profile_name_par\"" >> wg-vpn-auto.conf.tmp
 echo >> wg-vpn-auto.conf.tmp
 
 sudo mv wg-vpn-auto.conf.tmp /etc/wg-vpn-auto.conf -f
+rm -f wg-vpn-auto.conf.tmp
 echo "/etc/wg-vpn-auto.conf created."
 
 sudo cp -f wg-vpn-auto.sh /usr/local/bin/wg-vpn-auto.sh
@@ -163,11 +164,11 @@ if (( delete || new_installation ))
 then
   private_key=$(wg genkey)
 
-  nmcli connection add type wireguard con-name "$profile_name_par" ifname wg-auto
-  nmcli connection modify "$profile_name_par" wireguard.private-key "${private_key}" ipv4.method manual ipv4.addresses 10.255.255.1/32 ipv6.method ignore connection.autoconnect no connection.permissions ""
+  sudo nmcli connection add type wireguard con-name "$profile_name_par" ifname wg-auto
+  sudo nmcli connection modify "$profile_name_par" wireguard.private-key "${private_key}" ipv4.method manual ipv4.addresses 10.255.255.1/32 ipv6.method ignore connection.autoconnect no connection.permissions ""
 
   sudo systemctl restart NetworkManager
-  nmcli connection down "$profile_name_par"
+  sudo nmcli connection down "$profile_name_par"
   echo "'$profile_name_par' dummy profile created."
 fi
 

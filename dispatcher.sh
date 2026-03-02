@@ -26,12 +26,6 @@ if [[ "$1" == "wg-auto" ]]; then
         
         log "AUTO SCRIPT TRIGGERED"
         log "RESULT: $result"
-
-        # Small delay to avoid race condition
-        #sleep 1
-
-        # Immediately deactivate fake WG interface
-        #nmcli connection down "Proton VPN Auto"
     fi
 
     if [[ "$2" == "down" ]]; then

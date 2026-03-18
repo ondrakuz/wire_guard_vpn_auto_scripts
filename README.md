@@ -13,7 +13,7 @@ Automatic WireGuard VPN server selection and monitoring for NetworkManager. Uses
 
 | File | Description |
 |---|---|
-| `wg-vpn-auto.sh` | Main orchestrator — server evaluation, scoring, selection, and monitoring daemon |
+| `wg-vpn-auto.py` | Main orchestrator — server evaluation, scoring, selection, and monitoring daemon |
 | `dispatcher.sh` | NetworkManager dispatcher script — triggers the service on dummy connection up/down |
 | `wg-vpn-auto.service` | systemd unit file for the orchestrator daemon |
 | `wg-vpn-auto.conf` | Default configuration (installed to `/etc/wg-vpn-auto.conf`) |
@@ -95,3 +95,4 @@ tail -f /tmp/nm-dispatch.log
 - NetworkManager with WireGuard support
 - `wg` (wireguard-tools)
 - systemd
+- Python 3

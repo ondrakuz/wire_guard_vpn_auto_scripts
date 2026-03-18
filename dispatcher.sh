@@ -30,10 +30,11 @@ if [[ "$1" == "wg-auto" ]]; then
 
     if [[ "$2" == "down" ]]; then
         if [[ -f /run/wg-vpn-auto.active ]]; then
-            systemctl stop wg-vpn-auto
+            systemctl stop wg-vpn-auto.service
             ACTIVE_CONN=$(cat /run/wg-vpn-auto.active)
             nmcli connection down "$ACTIVE_CONN"
             rm -f /run/wg-vpn-auto.active
+            log "AUTO SCRIPT STOPPED, $ACTIVE_CONN disconnected"
         fi
     fi
 

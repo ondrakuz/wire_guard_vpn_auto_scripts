@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import asyncio
+from datetime import datetime
 import subprocess
 import re
 import time
@@ -25,6 +26,58 @@ W_STALE = 1
 
 ACTIVE_FILE = Path("/run/wg-vpn-auto.active")
 SWITCH_FILE = Path("/run/wg-vpn-auto.lastswitch")
+
+LOG_FILE = Path("/tmp/nm-dispatch.log")
+
+# ------------------------------------------------------------
+# Utilities
+# ------------------------------------------------------------
+
+def log(msg):
+    ts = datetime.now().strftime('%y-%m-%d %H:%M:%S')
+    line = f"[{ts}] {msg}"
+
+    print(line)
+
+    if LOG_FILE and LOG_FILE.exists():
+        with open(LOG_FILE, "a") as log_file:
+            print(line, file=log_file, flush=True)
+
+def detect_nm_storage():
+    for p in [
+        "/run/NetworkManager/system-connections",
+        "/etc/NetworkManager/system-connections",
+    ]:
+        path = Path(p)
+        if path.exists():
+            return path
+    raise RuntimeError("No NM storage found")
+
+NM_STORAGE = detect_nm_storage()
+
+def list_wireguard_connections():
+    result = subprocess.run(
+        ["nmcli", "-t", "-f", "NAME,TYPE", "connection", "show"],
+        capture_output=True,
+        text=True,
+    )
+    conns = []
+    for line in result.stdout.splitlines():
+        name, typ = line.split(":")
+        if typ == "wireguard":
+            conns.append(name)
+    return conns
+
+def find_conf_file(name):
+    for f in NM_STORAGE.glob("*.nmconnection"):
+        if f.read_text().find(f"id={name}") != -1:
+            return f
+    return None
+
+def extract_endpoint(conf):
+    text = conf.read_text()
+    m = re.search(r"endpoint\s*=\s*([0-9\.]+):", text)
+    return m.group(1) if m else None
 
 # ------------------------------------------------------------
 # Load configuration file (Bash-compatible style)
@@ -54,6 +107,7 @@ def load_config():
     global W_LAT
     global W_LOSS
     global W_STALE
+    global LOG_FILE
 
     active_user = detect_active_user()
 
@@ -110,52 +164,11 @@ def load_config():
             W_LOSS = int(value)
         elif key == "W_STALE":
             W_STALE = int(value)
+        elif key == "LOG_FILE":
+            LOG_FILE = Path(value)
 
 # Load config immediately after defining defaults
 load_config()
-
-# ------------------------------------------------------------
-# Utilities
-# ------------------------------------------------------------
-
-def log(msg):
-    print(msg)
-
-def detect_nm_storage():
-    for p in [
-        "/run/NetworkManager/system-connections",
-        "/etc/NetworkManager/system-connections",
-    ]:
-        path = Path(p)
-        if path.exists():
-            return path
-    raise RuntimeError("No NM storage found")
-
-NM_STORAGE = detect_nm_storage()
-
-def list_wireguard_connections():
-    result = subprocess.run(
-        ["nmcli", "-t", "-f", "NAME,TYPE", "connection", "show"],
-        capture_output=True,
-        text=True,
-    )
-    conns = []
-    for line in result.stdout.splitlines():
-        name, typ = line.split(":")
-        if typ == "wireguard":
-            conns.append(name)
-    return conns
-
-def find_conf_file(name):
-    for f in NM_STORAGE.glob("*.nmconnection"):
-        if f.read_text().find(f"id={name}") != -1:
-            return f
-    return None
-
-def extract_endpoint(conf):
-    text = conf.read_text()
-    m = re.search(r"endpoint\s*=\s*([0-9\.]+):", text)
-    return m.group(1) if m else None
 
 # ------------------------------------------------------------
 # Async Probing
@@ -236,24 +249,25 @@ async def monitor():
     last_switch = 0
 
     while True:
-        await asyncio.sleep(CHECK_INTERVAL)
 
-        if not ACTIVE_FILE.exists():
-            continue
+        active = 'None'
+        current_score = 0
+        if ACTIVE_FILE.exists():
+            active = ACTIVE_FILE.read_text().strip()
 
-        active = ACTIVE_FILE.read_text().strip()
+            conf = find_conf_file(active)
+            if not conf:
+                continue
 
-        conf = find_conf_file(active)
-        if not conf:
-            continue
+            endpoint = extract_endpoint(conf)
+            if not endpoint:
+                continue
 
-        endpoint = extract_endpoint(conf)
-        if not endpoint:
-            continue
+            lat, loss = await probe_latency(endpoint)
+            hs = handshake_age()
+            current_score = score(lat, loss, hs)
 
-        lat, loss = await probe_latency(endpoint)
-        hs = handshake_age()
-        current_score = score(lat, loss, hs)
+        subprocess.run(["nmcli", "connection", "down", active])
 
         best, best_score = await evaluate_all(active)
         if not best:
@@ -267,16 +281,21 @@ async def monitor():
         now = int(time.time())
 
         if (
-            improvement > MIN_SCORE_IMPROVEMENT
-            and now - last_switch > SWITCH_COOLDOWN
+            (improvement > MIN_SCORE_IMPROVEMENT
+            and now - last_switch > SWITCH_COOLDOWN)
+            or not active
         ):
             log(f"Switching {active} -> {best}")
 
             subprocess.run(["nmcli", "connection", "up", best])
-            subprocess.run(["nmcli", "connection", "down", active])
 
             ACTIVE_FILE.write_text(best)
             SWITCH_FILE.write_text(str(now))
+        else:
+            subprocess.run(["nmcli", "connection", "up", active])
+
+
+        await asyncio.sleep(CHECK_INTERVAL)
 
 # ------------------------------------------------------------
 # Entry

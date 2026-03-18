@@ -7,6 +7,11 @@ new_installation=0
 profile_name_par=""
 profile_name=""
 
+
+# -----------------------------------------------------------------------------------------------------------------------
+# Parse command line options
+# -----------------------------------------------------------------------------------------------------------------------
+
 while getopts 'hrpdn:' opt; do
   case "$opt" in
    p)
@@ -30,7 +35,7 @@ while getopts 'hrpdn:' opt; do
       ;;
 
     h)
-      echo "Usage: $(basename $0) [-h] [-p] [-p] [-d] [-n profile_name]"
+      echo "Usage: $(basename $0) [-h] [-r] [-p] [-d] [-n profile_name]"
       exit 0
       ;;
 
@@ -45,6 +50,11 @@ while getopts 'hrpdn:' opt; do
       ;;
   esac
 done
+
+
+# -----------------------------------------------------------------------------------------------------------------------
+# Function to delete all profiles created by this script, including the dummy one, and the ones imported from ./proxies
+# -----------------------------------------------------------------------------------------------------------------------
 
 delete_profiles() {
   sudo nmcli connection delete "$profile_name"
@@ -82,6 +92,9 @@ then
   profile_name="$DUMMY_CONN_ID"
 fi
 
+# --------------------------------------------------------------------
+# Resolve dummy profile name and new installation status
+# --------------------------------------------------------------------
 
 if [ -z "$profile_name" ]
 then
@@ -100,14 +113,18 @@ else
   fi
 fi
 
-# remove installation
+
+# --------------------------------------------------------------------
+# Remove installation
+# --------------------------------------------------------------------
+
 if (( remove ))
 then
   sudo nmcli connection down "$profile_name_par"
   sudo systemctl disable wg-vpn-auto
   delete_profiles
   sudo rm -f /etc/wg-vpn-auto.conf
-  sudo rm -f /usr/local/bin/wg-vpn-auto.sh
+  sudo rm -f /usr/local/bin/wg-vpn-auto.py
   sudo rm -f /etc/systemd/system/wg-vpn-auto.service
   sudo rm -f /etc/NetworkManager/dispatcher.d/90-wg-vpn-auto
   sudo systemctl restart NetworkManager
@@ -116,14 +133,20 @@ then
 fi
 
 
-# deleting connection profiles
+# --------------------------------------------------------------------
+# Deleting connection profiles
+# --------------------------------------------------------------------
+
 if (( delete ))
 then
   delete_profiles
 fi
 
 
-# import of config files from subdirectory ./proxies
+# --------------------------------------------------------------------
+# Import of config files from subdirectory ./proxies
+# --------------------------------------------------------------------
+
 if (( proxies ))
 then
   cd proxies
@@ -138,6 +161,11 @@ then
   cd ..
 fi
 
+
+# ------------------------------------------------------------------------------
+# Create and copy new config with dummy profile name to /etc/wg-vpn-auto.conf
+# ------------------------------------------------------------------------------
+
 cat wg-vpn-auto.conf > wg-vpn-auto.conf.tmp
 echo >> wg-vpn-auto.conf.tmp
 echo "# Installed dummy profile name" >> wg-vpn-auto.conf.tmp
@@ -148,11 +176,16 @@ sudo mv wg-vpn-auto.conf.tmp /etc/wg-vpn-auto.conf -f
 rm -f wg-vpn-auto.conf.tmp
 echo "/etc/wg-vpn-auto.conf created."
 
-sudo cp -f wg-vpn-auto.sh /usr/local/bin/wg-vpn-auto.sh
-sudo chmod +x /usr/local/bin/wg-vpn-auto.sh
-echo "/usr/local/bin/wg-vpn-auto.sh copied."
 
-(( ! new_installation )) && systemctl disable wg-vpn-auto
+# ------------------------------------------------------------------------------------------------------------------
+# Copy python daemon script, systemd service file and dispatcher script to their locations, and enable the service
+# ------------------------------------------------------------------------------------------------------------------
+
+sudo cp -f wg-vpn-auto.py /usr/local/bin/wg-vpn-auto.py
+sudo chmod +x /usr/local/bin/wg-vpn-auto.py
+echo "/usr/local/bin/wg-vpn-auto.py copied."
+
+(( ! new_installation )) && sudo systemctl disable wg-vpn-auto
 sudo cp -f wg-vpn-auto.service /etc/systemd/system/wg-vpn-auto.service
 echo "/etc/systemd/system/wg-vpn-auto.service copied."
 
@@ -174,7 +207,7 @@ fi
 
 sudo systemctl daemon-reload
 sudo systemctl enable wg-vpn-auto
-sudo systemctl start wg-vpn-auto
+#sudo systemctl start wg-vpn-auto
 
 if (( new_installation ))
 then

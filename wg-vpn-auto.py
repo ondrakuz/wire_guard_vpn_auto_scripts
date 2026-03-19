@@ -283,7 +283,7 @@ async def monitor():
         if (
             (improvement > MIN_SCORE_IMPROVEMENT
             and now - last_switch > SWITCH_COOLDOWN)
-            or not active
+            or active == "None"
         ):
             log(f"Switching {active} -> {best}")
 
@@ -292,6 +292,7 @@ async def monitor():
             ACTIVE_FILE.write_text(best)
             SWITCH_FILE.write_text(str(now))
         else:
+            log(f"Restarting \"{active}\" connection")
             subprocess.run(["nmcli", "connection", "up", active])
 
 

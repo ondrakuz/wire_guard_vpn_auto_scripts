@@ -2,10 +2,10 @@
 Description=Restore WireGuard VPN Auto on boot
 After=NetworkManager-wait-online.service
 Requires=NetworkManager-wait-online.service
+ConditionPathExists=/var/lib/wg-vpn-auto/enabled
 
 [Service]
 Type=oneshot
-ConditionPathExists=/var/lib/wg-vpn-auto/enabled
 ExecStart=/bin/bash -c '. /etc/wg-vpn-auto.conf && exec nmcli connection up "$DUMMY_CONN_ID"'
 
 [Install]

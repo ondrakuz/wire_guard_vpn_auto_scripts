@@ -2,8 +2,10 @@
 
 import asyncio
 from datetime import datetime
+import signal
 import subprocess
 import re
+import sys
 import time
 import pwd
 import shlex
@@ -23,6 +25,8 @@ SWITCH_COOLDOWN = 180
 W_LAT = 1
 W_LOSS = 5
 W_STALE = 1
+
+DUMMY_CONN_ID = ""
 
 ACTIVE_FILE = Path("/run/wg-vpn-auto.active")
 SWITCH_FILE = Path("/run/wg-vpn-auto.lastswitch")
@@ -107,6 +111,7 @@ def load_config():
     global W_LAT
     global W_LOSS
     global W_STALE
+    global DUMMY_CONN_ID
     global LOG_FILE
 
     active_user = detect_active_user()
@@ -164,6 +169,8 @@ def load_config():
             W_LOSS = int(value)
         elif key == "W_STALE":
             W_STALE = int(value)
+        elif key == "DUMMY_CONN_ID":
+            DUMMY_CONN_ID = value
         elif key == "LOG_FILE":
             LOG_FILE = Path(value)
 
@@ -198,6 +205,24 @@ def handshake_age():
 
 def score(lat, loss, hs):
     return lat * W_LAT + loss * W_LOSS + hs * W_STALE
+
+def cleanup():
+    if ACTIVE_FILE.exists():
+        active = ACTIVE_FILE.read_text().strip()
+        log(f"Disconnecting active proxy '{active}'.")
+        subprocess.run(["nmcli", "connection", "down", active],
+                       capture_output=True)
+        ACTIVE_FILE.unlink(missing_ok=True)
+    SWITCH_FILE.unlink(missing_ok=True)
+    if DUMMY_CONN_ID:
+        log(f"Deactivating dummy profile '{DUMMY_CONN_ID}'.")
+        subprocess.run(["nmcli", "connection", "down", DUMMY_CONN_ID],
+                       capture_output=True)
+
+def handle_sigterm(_signum, _frame):
+    log("Received SIGTERM, cleaning up.")
+    cleanup()
+    sys.exit(0)
 
 # ------------------------------------------------------------
 # Parallel evaluation
@@ -263,15 +288,16 @@ async def monitor():
             if not endpoint:
                 continue
 
+            subprocess.run(["nmcli", "connection", "down", active])
+
             lat, loss = await probe_latency(endpoint)
             hs = handshake_age()
             current_score = score(lat, loss, hs)
 
-        subprocess.run(["nmcli", "connection", "down", active])
-
         best, best_score = await evaluate_all(active)
         if not best:
-            continue
+            cleanup()
+            return
 
         improvement = current_score - best_score
 
@@ -303,4 +329,5 @@ async def monitor():
 # ------------------------------------------------------------
 
 if __name__ == "__main__":
+    signal.signal(signal.SIGTERM, handle_sigterm)
     asyncio.run(monitor())

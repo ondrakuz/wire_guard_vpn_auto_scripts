@@ -32,13 +32,6 @@ if [[ "$1" == "wg-auto" ]]; then
 
     if [[ "$2" == "down" ]]; then
         rm -f /var/lib/wg-vpn-auto/enabled
-
-        if [[ -f /run/wg-vpn-auto.active ]]; then
-            ACTIVE_CONN=$(cat /run/wg-vpn-auto.active)
-            nmcli connection down "$ACTIVE_CONN"
-            rm -f /run/wg-vpn-auto.active
-        fi
-
         systemctl stop wg-vpn-auto
         log "AUTO SCRIPT STOPPED"
     fi

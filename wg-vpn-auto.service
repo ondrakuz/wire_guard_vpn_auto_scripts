@@ -5,6 +5,7 @@ Requires=NetworkManager.service
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/wg-vpn-auto.sh --daemon
+ExecStart=/usr/local/bin/wg-vpn-auto.py
+ExecStopPost=/bin/bash -c '. /etc/wg-vpn-auto.conf 2>/dev/null && nmcli connection down "$DUMMY_CONN_ID" 2>/dev/null; true'
 Restart=on-abnormal
 RestartSec=5

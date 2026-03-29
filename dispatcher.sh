@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Proton VPN Auto WireGuard trigger
+# WireGuard VPN Auto trigger
 
 LOG_FILE="/tmp/nm-dispatch.log"
 
@@ -20,22 +20,27 @@ log "Dispatcher running as: $(whoami)"
 if [[ "$1" == "wg-auto" ]]; then
 
     if [[ "$2" == "up" ]]; then
-        # Run auto selection script
+        mkdir -p /var/lib/wg-vpn-auto
+        touch /var/lib/wg-vpn-auto/enabled
+
         systemctl restart --no-block wg-vpn-auto.service
         result="$?"
-        
+
         log "AUTO SCRIPT TRIGGERED"
         log "RESULT: $result"
     fi
 
     if [[ "$2" == "down" ]]; then
+        rm -f /var/lib/wg-vpn-auto/enabled
+
         if [[ -f /run/wg-vpn-auto.active ]]; then
-            systemctl stop wg-vpn-auto.service
             ACTIVE_CONN=$(cat /run/wg-vpn-auto.active)
             nmcli connection down "$ACTIVE_CONN"
             rm -f /run/wg-vpn-auto.active
-            log "AUTO SCRIPT STOPPED, $ACTIVE_CONN disconnected"
         fi
+
+        systemctl stop wg-vpn-auto
+        log "AUTO SCRIPT STOPPED"
     fi
 
 fi

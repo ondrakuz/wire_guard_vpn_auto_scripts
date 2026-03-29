@@ -122,11 +122,15 @@ if (( remove ))
 then
   sudo nmcli connection down "$profile_name_par"
   sudo systemctl disable wg-vpn-auto
+  sudo systemctl disable wg-vpn-auto-restore
   delete_profiles
   sudo rm -f /etc/wg-vpn-auto.conf
   sudo rm -f /usr/local/bin/wg-vpn-auto.py
   sudo rm -f /etc/systemd/system/wg-vpn-auto.service
+  sudo rm -f /etc/systemd/system/wg-vpn-auto-restore.service
   sudo rm -f /etc/NetworkManager/dispatcher.d/90-wg-vpn-auto
+  sudo rm -rf /var/lib/wg-vpn-auto
+  sudo systemctl daemon-reload
   sudo systemctl restart NetworkManager
   echo "VPN auto ochestrator service installation removed."
   exit 0
@@ -154,7 +158,7 @@ then
   do 
       conn_name=$(echo "$file" | sed -r "s/^(.*)\.conf/\1/")
       sudo nmcli connection import type wireguard file $file
-      sudo nmcli connection modify "$conn_name" connection.permissions "user:root"
+      sudo nmcli connection modify "$conn_name" connection.permissions "user:root" connection.autoconnect no
       sudo nmcli connection down "$conn_name"
       echo "$file file imported as $conn_name connection."
   done
@@ -186,8 +190,12 @@ sudo chmod +x /usr/local/bin/wg-vpn-auto.py
 echo "/usr/local/bin/wg-vpn-auto.py copied."
 
 (( ! new_installation )) && sudo systemctl disable wg-vpn-auto
+(( ! new_installation )) && sudo systemctl disable wg-vpn-auto-restore
 sudo cp -f wg-vpn-auto.service /etc/systemd/system/wg-vpn-auto.service
 echo "/etc/systemd/system/wg-vpn-auto.service copied."
+
+sudo cp -f wg-vpn-auto-restore.service /etc/systemd/system/wg-vpn-auto-restore.service
+echo "/etc/systemd/system/wg-vpn-auto-restore.service copied."
 
 sudo cp -f dispatcher.sh /etc/NetworkManager/dispatcher.d/90-wg-vpn-auto
 sudo chmod +x /etc/NetworkManager/dispatcher.d/90-wg-vpn-auto
@@ -205,9 +213,9 @@ then
   echo "'$profile_name_par' dummy profile created."
 fi
 
+sudo mkdir -p /var/lib/wg-vpn-auto
 sudo systemctl daemon-reload
-sudo systemctl enable wg-vpn-auto
-#sudo systemctl start wg-vpn-auto
+sudo systemctl enable wg-vpn-auto-restore
 
 if (( new_installation ))
 then
